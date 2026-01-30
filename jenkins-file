@@ -1,0 +1,50 @@
+pipeline {
+    agent any
+
+    environment {
+        SONARQUBE = 'sonarqube'
+        IMAGE_NAME = 'aws-session'
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/carl300/AWS-Session.git'
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh 'npm install'
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv("${SONARQUBE}") {
+                    sh 'sonar-scanner'
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh """
+                    docker build -t ${IMAGE_NAME}:latest .
+                """
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh """
+                    docker stop ${IMAGE_NAME} || true
+                    docker rm ${IMAGE_NAME} || true
+                    docker run -d --name ${IMAGE_NAME} -p 3000:3000 ${IMAGE_NAME}:latest
+                """
+            }
+        }
+    }
+}
