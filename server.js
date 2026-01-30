@@ -7,13 +7,17 @@ const port = process.env.PORT || 3000;
 require("dotenv").config();
 
 const api_key = process.env.SECRET_KEY;
-
 const stripe = require("stripe")(api_key);
 
-// ------------ Imports & necessary things here ------------
+// ---------------- Prometheus Metrics ----------------
+const client = require("prom-client");
+const register = new client.Registry();
+
+// Collect default Node.js + process metrics
+client.collectDefaultMetrics({ register });
+// ----------------------------------------------------
 
 // Setting up the static folder:
-// app.use(express.static(resolve(__dirname, "./client")));
 app.use(express.static(resolve(__dirname, process.env.STATIC_DIR)));
 
 app.use(express.json());
@@ -50,13 +54,22 @@ app.get("/workshop3", (req, res) => {
   res.sendFile(path);
 });
 
-// ____________________________________________________________________________________
+// ---------------- Prometheus Metrics Endpoint ----------------
+app.get("/metrics", async (req, res) => {
+  try {
+    res.set("Content-Type", register.contentType);
+    res.end(await register.metrics());
+  } catch (err) {
+    res.status(500).end(err);
+  }
+});
+// -------------------------------------------------------------
 
+// Stripe checkout session
 const domainURL = process.env.DOMAIN;
 app.post("/create-checkout-session/:pid", async (req, res) => {
-  
   const priceId = req.params.pid;
-  
+
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     success_url: `${domainURL}/success?id={CHECKOUT_SESSION_ID}`,
@@ -68,9 +81,9 @@ app.post("/create-checkout-session/:pid", async (req, res) => {
         quantity: 1,
       },
     ],
-    // allowing the use of promo-codes:
     allow_promotion_codes: true,
   });
+
   res.json({
     id: session.id,
   });
@@ -79,5 +92,5 @@ app.post("/create-checkout-session/:pid", async (req, res) => {
 // Server listening:
 app.listen(port, () => {
   console.log(`Server listening on port: ${port}`);
-  console.log(`You may access you app at: ${domainURL}`);
+  console.log(`You may access your app at: ${domainURL}`);
 });
